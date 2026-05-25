@@ -108,6 +108,7 @@ Properties: `licenseKey`, `licenseStatus` (LicenseStatus), `expiresAt`, `product
 \AshleyFae\SoftwareUpdater\SDK::instance()->register(
     new LicenseConfig(
         optionName: 'novelist_review_excerpts_license_key',
+        productId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
         pluginFile: __FILE__,
         version:    NOVELIST_REVIEW_EXCERPTS_VERSION,
     )
@@ -123,7 +124,39 @@ $result = SDK::instance()->license('novelist_review_excerpts_license_key')->acti
 SDK::instance()->license('novelist_review_excerpts_license_key')->deactivate();
 ```
 
+Read cached status (no HTTP call — reads from WP option):
+```php
+$status = SDK::instance()->license('novelist_review_excerpts_license_key')->getStatus();
+// returns LicenseStatusResponse|null (null = cache not yet populated)
+```
+
+Force a fresh status check (makes a live API call and updates the cache):
+```php
+$status = SDK::instance()->license('novelist_review_excerpts_license_key')->refreshStatus();
+// returns LicenseStatusResponse|null
+```
+
 `SDK::instance()->license($optionName)` returns a `LicenseManager` bound to the config registered under that option name.
+
+---
+
+## Upgrade Migration (consuming plugin responsibility)
+
+When a plugin upgrades from EDD to the SDK, the old `_license_active` option contains EDD-shaped data that the SDK does not read. The new `{optionName}_status` cache option won't exist yet, so `getStatus()` returns null until the weekly cron fires (up to 7 days).
+
+**Recommended pattern** — one-time freshness check on plugin load:
+
+```php
+// In the plugin's boot method, after registering with the SDK:
+if ( get_option( 'novelist_review_excerpts_license_key' )
+    && ! get_option( 'novelist_review_excerpts_license_key_status' ) ) {
+    SDK::instance()->license( 'novelist_review_excerpts_license_key' )->refreshStatus();
+}
+```
+
+The condition is self-clearing: once `refreshStatus()` writes the cache option, this block never runs again. The user's license status is populated immediately after the upgrade with no manual action required.
+
+The EDD `novelist_{shortname}_license_active` option is left in place untouched — no migration, no deletion.
 
 ---
 
