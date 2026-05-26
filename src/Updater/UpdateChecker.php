@@ -24,9 +24,26 @@ class UpdateChecker
         add_action('upgrader_process_complete', [$this, 'clearReleaseCache'], 10, 2);
     }
 
+    /**
+     * Checks if the SDK is definitely loaded.
+     * This seems dumb but we have to account for an edge case where:
+     * - Plugin is using SDK.
+     * - Plugin checks for updates.
+     * - Plugin downloads new update.
+     * - New update does not include SDK code.
+     */
+    protected function isSdkAvailable() : bool
+    {
+        return class_exists(ApiClient::class);
+    }
+
     public function checkForPluginUpdates(mixed $transient): mixed
     {
         if (empty($transient->checked)) {
+            return $transient;
+        }
+
+        if (! $this->isSdkAvailable()) {
             return $transient;
         }
 
@@ -55,6 +72,10 @@ class UpdateChecker
     public function checkForThemeUpdates(mixed $transient): mixed
     {
         if (empty($transient->checked)) {
+            return $transient;
+        }
+
+        if (! $this->isSdkAvailable()) {
             return $transient;
         }
 
