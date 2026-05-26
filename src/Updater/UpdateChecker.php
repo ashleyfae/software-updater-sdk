@@ -3,7 +3,9 @@
 namespace AshleyFae\SoftwareUpdater\Updater;
 
 use AshleyFae\SoftwareUpdater\DataTransferObjects\LicenseConfig;
+use AshleyFae\SoftwareUpdater\DataTransferObjects\PluginLicenseConfig;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\ReleaseResponse;
+use AshleyFae\SoftwareUpdater\DataTransferObjects\ThemeLicenseConfig;
 use AshleyFae\SoftwareUpdater\Http\ApiClient;
 use AshleyFae\SoftwareUpdater\Registries\LicenseRegistry;
 use stdClass;
@@ -15,35 +17,62 @@ class UpdateChecker
 
     public function load(): void
     {
-        add_filter('pre_set_site_transient_update_plugins', [$this, 'checkForUpdates']);
+        add_filter('pre_set_site_transient_update_plugins', [$this, 'checkForPluginUpdates']);
+        add_filter('pre_set_site_transient_update_themes', [$this, 'checkForThemeUpdates']);
         add_filter('plugins_api', [$this, 'pluginInfo'], 10, 3);
         add_action('upgrader_process_complete', [$this, 'clearReleaseCache'], 10, 2);
     }
 
-    public function checkForUpdates(mixed $transient): mixed
+    public function checkForPluginUpdates(mixed $transient): mixed
     {
         if (empty($transient->checked)) {
             return $transient;
         }
 
-        $releases = $this->getReleases();
-
-        foreach ($releases as $licenseKey => $release) {
+        foreach ($this->getReleases() as $licenseKey => $release) {
             if ($release === null) {
                 continue;
             }
 
             $config = $this->getConfigByLicenseKey($licenseKey);
-            if ($config === null) {
+            if (! ($config instanceof PluginLicenseConfig)) {
                 continue;
             }
 
             $basename = plugin_basename($config->pluginFile);
 
             if (version_compare($release->version, $config->version, '>') && ! empty($release->downloadUrl)) {
-                $transient->response[$basename] = $this->buildUpdateObject($release, $config);
+                $transient->response[$basename] = $this->buildPluginUpdateObject($release, $config);
             } else {
-                $transient->no_update[$basename] = $this->buildUpdateObject($release, $config);
+                $transient->no_update[$basename] = $this->buildPluginUpdateObject($release, $config);
+            }
+        }
+
+        return $transient;
+    }
+
+    public function checkForThemeUpdates(mixed $transient): mixed
+    {
+        if (empty($transient->checked)) {
+            return $transient;
+        }
+
+        foreach ($this->getReleases() as $licenseKey => $release) {
+            if ($release === null) {
+                continue;
+            }
+
+            $config = $this->getConfigByLicenseKey($licenseKey);
+            if (! ($config instanceof ThemeLicenseConfig)) {
+                continue;
+            }
+
+            $slug = $this->slug($config);
+
+            if (version_compare($release->version, $config->version, '>') && ! empty($release->downloadUrl)) {
+                $transient->response[$slug] = $this->buildThemeUpdateArray($release, $config);
+            } else {
+                $transient->no_update[$slug] = $this->buildThemeUpdateArray($release, $config);
             }
         }
 
@@ -56,7 +85,7 @@ class UpdateChecker
             return $result;
         }
 
-        $config = $this->getConfigBySlug($args->slug ?? '');
+        $config = $this->getPluginConfigBySlug($args->slug ?? '');
         if ($config === null) {
             return $result;
         }
@@ -66,9 +95,7 @@ class UpdateChecker
             return $result;
         }
 
-        $releases = $this->getReleases();
-        $release  = $releases[$licenseKey] ?? null;
-
+        $release = $this->getReleases()[$licenseKey] ?? null;
         if ($release === null) {
             return $result;
         }
@@ -78,7 +105,8 @@ class UpdateChecker
 
     public function clearReleaseCache(mixed $upgrader, array $options): void
     {
-        if (($options['action'] ?? '') === 'update' && ($options['type'] ?? '') === 'plugin') {
+        $type = $options['type'] ?? '';
+        if ($type === 'plugin' || $type === 'theme') {
             delete_transient(self::TRANSIENT_KEY);
         }
     }
@@ -114,7 +142,7 @@ class UpdateChecker
 
         set_transient(
             self::TRANSIENT_KEY,
-            array_map(fn($r) => $r !== null ? $r->toArray() : null, $releases),
+            array_map(fn($release) => $release !== null ? $release->toArray() : null, $releases),
             self::TRANSIENT_TTL
         );
 
@@ -132,10 +160,10 @@ class UpdateChecker
         return null;
     }
 
-    private function getConfigBySlug(string $slug): ?LicenseConfig
+    private function getPluginConfigBySlug(string $slug): ?PluginLicenseConfig
     {
         foreach (LicenseRegistry::getInstance()->all() as $config) {
-            if ($this->pluginSlug($config) === $slug) {
+            if ($config instanceof PluginLicenseConfig && $this->slug($config) === $slug) {
                 return $config;
             }
         }
@@ -143,35 +171,51 @@ class UpdateChecker
         return null;
     }
 
-    private function pluginSlug(LicenseConfig $config): string
+    private function slug(LicenseConfig $config): string
     {
-        return basename(dirname($config->pluginFile));
+        if ($config instanceof PluginLicenseConfig) {
+            return basename(dirname($config->pluginFile));
+        }
+
+        return basename($config->themeDirectory);
     }
 
-    private function buildUpdateObject(ReleaseResponse $release, LicenseConfig $config): stdClass
+    private function buildPluginUpdateObject(ReleaseResponse $release, PluginLicenseConfig $config): stdClass
     {
-        $obj              = new stdClass();
-        $obj->id          = 'w.org/plugins/' . $this->pluginSlug($config);
-        $obj->slug        = $this->pluginSlug($config);
-        $obj->plugin      = plugin_basename($config->pluginFile);
-        $obj->new_version = $release->version;
-        $obj->url         = '';
-        $obj->package     = $release->downloadUrl ?? '';
-        $obj->icons       = [];
-        $obj->banners     = [];
-        $obj->banners_rtl = [];
-        $obj->requires    = $release->requires['php'] ?? '';
+        $obj               = new stdClass();
+        $obj->id           = 'w.org/plugins/' . $this->slug($config);
+        $obj->slug         = $this->slug($config);
+        $obj->plugin       = plugin_basename($config->pluginFile);
+        $obj->new_version  = $release->version;
+        $obj->url          = '';
+        $obj->package      = $release->downloadUrl ?? '';
+        $obj->icons        = [];
+        $obj->banners      = [];
+        $obj->banners_rtl  = [];
+        $obj->requires     = $release->requires['wp'] ?? '';
         $obj->requires_php = $release->requires['php'] ?? '';
-        $obj->tested      = '';
+        $obj->tested       = '';
 
         return $obj;
     }
 
-    private function buildPluginInfoObject(ReleaseResponse $release, LicenseConfig $config): stdClass
+    private function buildThemeUpdateArray(ReleaseResponse $release, ThemeLicenseConfig $config): array
+    {
+        return [
+            'theme'        => $this->slug($config),
+            'new_version'  => $release->version,
+            'url'          => '',
+            'package'      => $release->downloadUrl ?? '',
+            'requires'     => $release->requires['wp'] ?? '',
+            'requires_php' => $release->requires['php'] ?? '',
+        ];
+    }
+
+    private function buildPluginInfoObject(ReleaseResponse $release, PluginLicenseConfig $config): stdClass
     {
         $obj                = new stdClass();
-        $obj->name          = $this->pluginSlug($config);
-        $obj->slug          = $this->pluginSlug($config);
+        $obj->name          = $this->slug($config);
+        $obj->slug          = $this->slug($config);
         $obj->version       = $release->version;
         $obj->last_updated  = $release->updatedAt?->format('Y-m-d') ?? '';
         $obj->requires      = $release->requires['wp'] ?? '';

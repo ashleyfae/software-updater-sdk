@@ -40,7 +40,9 @@ src/
 ├── SDK.php                                 # main facade singleton; loaded only for winning version
 │
 ├── DataTransferObjects/
-│   ├── LicenseConfig.php                   # INPUT DTO — what a plugin registers with the SDK
+│   ├── LicenseConfig.php                   # INPUT DTO — abstract base (optionName, productId, version)
+│   ├── PluginLicenseConfig.php             # INPUT DTO — extends LicenseConfig; adds pluginFile
+│   ├── ThemeLicenseConfig.php              # INPUT DTO — extends LicenseConfig; adds themeDirectory
 │   ├── LicenseStatusResponse.php           # OUTPUT DTO — from bulkStatus / show endpoints
 │   ├── ActivationResponse.php              # OUTPUT DTO — from activate endpoint
 │   └── ReleaseResponse.php                 # OUTPUT DTO — from releases/latest endpoint
