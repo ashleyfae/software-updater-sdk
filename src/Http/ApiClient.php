@@ -65,6 +65,7 @@ class ApiClient
     {
         $data = $this->get('products/releases/latest', [
             'license_keys' => $licenseKeys,
+            'url'          => home_url(),
             'php_version'  => PHP_VERSION,
             'wp_version'   => get_bloginfo('version'),
         ]);
