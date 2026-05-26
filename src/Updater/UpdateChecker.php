@@ -6,6 +6,7 @@ use AshleyFae\SoftwareUpdater\DataTransferObjects\LicenseConfig;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\PluginLicenseConfig;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\ReleaseResponse;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\ThemeLicenseConfig;
+use AshleyFae\SoftwareUpdater\Exceptions\ApiRequestFailedException;
 use AshleyFae\SoftwareUpdater\Http\ApiClient;
 use AshleyFae\SoftwareUpdater\Registries\LicenseRegistry;
 use stdClass;
@@ -138,7 +139,12 @@ class UpdateChecker
             return [];
         }
 
-        $releases = (new ApiClient())->latestReleases($licenseKeys);
+        try {
+            $releases = (new ApiClient())->latestReleases($licenseKeys);
+        } catch (ApiRequestFailedException $e) {
+            error_log('software-updater-sdk: update check failed — ' . $e->getMessage());
+            return [];
+        }
 
         set_transient(
             self::TRANSIENT_KEY,

@@ -5,22 +5,29 @@ namespace AshleyFae\SoftwareUpdater\Http;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\ActivationResponse;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\LicenseStatusResponse;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\ReleaseResponse;
+use AshleyFae\SoftwareUpdater\Exceptions\ApiRequestFailedException;
 
 class ApiClient
 {
     private const BASE_URL = 'https://software.nosegraze.com/api/';
     private const TIMEOUT  = 15;
 
-    public function activate(string $licenseKey, string $productId): ?ActivationResponse
+    /**
+     * @throws ApiRequestFailedException
+     */
+    public function activate(string $licenseKey, string $productId): ActivationResponse
     {
         $data = $this->post("licenses/{$licenseKey}/activations", [
             'product_id' => $productId,
             'url'        => home_url(),
         ]);
 
-        return $data !== null ? ActivationResponse::fromArray($data) : null;
+        return ActivationResponse::fromArray($data ?? []);
     }
 
+    /**
+     * @throws ApiRequestFailedException
+     */
     public function deactivate(string $licenseKey): void
     {
         $this->delete("licenses/{$licenseKey}/activations", [
@@ -31,6 +38,7 @@ class ApiClient
     /**
      * @param  string[]  $licenseKeys
      * @return array<string, LicenseStatusResponse|null>
+     * @throws ApiRequestFailedException
      */
     public function bulkStatus(array $licenseKeys): array
     {
@@ -51,6 +59,7 @@ class ApiClient
     /**
      * @param  string[]  $licenseKeys
      * @return array<string, ReleaseResponse|null>
+     * @throws ApiRequestFailedException
      */
     public function latestReleases(array $licenseKeys): array
     {
@@ -72,6 +81,9 @@ class ApiClient
         return $result;
     }
 
+    /**
+     * @throws ApiRequestFailedException
+     */
     private function post(string $endpoint, array $body): ?array
     {
         $response = wp_remote_post($this->url($endpoint), [
@@ -86,9 +98,12 @@ class ApiClient
         return $this->parseResponse($response);
     }
 
+    /**
+     * @throws ApiRequestFailedException
+     */
     private function delete(string $endpoint, array $body): void
     {
-        wp_remote_request($this->url($endpoint), [
+        $response = wp_remote_request($this->url($endpoint), [
             'method'  => 'DELETE',
             'timeout' => self::TIMEOUT,
             'headers' => [
@@ -97,8 +112,13 @@ class ApiClient
             ],
             'body' => wp_json_encode($body),
         ]);
+
+        $this->parseResponse($response);
     }
 
+    /**
+     * @throws ApiRequestFailedException
+     */
     private function get(string $endpoint, array $params = []): ?array
     {
         $url = $this->url($endpoint);
@@ -114,16 +134,23 @@ class ApiClient
         return $this->parseResponse($response);
     }
 
+    /**
+     * @throws ApiRequestFailedException
+     */
     private function parseResponse(mixed $response): ?array
     {
         if (is_wp_error($response)) {
-            return null;
+            throw ApiRequestFailedException::connectionError($response->get_error_message());
         }
 
-        $code = wp_remote_retrieve_response_code($response);
+        $code = (int) wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
 
-        if ($code < 200 || $code >= 300 || empty($body)) {
+        if ($code < 200 || $code >= 300) {
+            throw ApiRequestFailedException::fromResponse($code, $body);
+        }
+
+        if (empty($body)) {
             return null;
         }
 

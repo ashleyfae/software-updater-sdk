@@ -2,6 +2,7 @@
 
 namespace AshleyFae\SoftwareUpdater\Scheduler;
 
+use AshleyFae\SoftwareUpdater\Exceptions\ApiRequestFailedException;
 use AshleyFae\SoftwareUpdater\Http\ApiClient;
 use AshleyFae\SoftwareUpdater\Registries\LicenseRegistry;
 
@@ -50,7 +51,12 @@ class WeeklyLicenseChecker
             return;
         }
 
-        $statuses = (new ApiClient())->bulkStatus(array_values($keysByOption));
+        try {
+            $statuses = (new ApiClient())->bulkStatus(array_values($keysByOption));
+        } catch (ApiRequestFailedException $e) {
+            error_log('software-updater-sdk: weekly status check failed — ' . $e->getMessage());
+            return;
+        }
 
         // Flip so we can look up optionName by licenseKey.
         $optionByKey = array_flip($keysByOption);

@@ -5,6 +5,7 @@ namespace AshleyFae\SoftwareUpdater\License;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\ActivationResponse;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\LicenseConfig;
 use AshleyFae\SoftwareUpdater\DataTransferObjects\LicenseStatusResponse;
+use AshleyFae\SoftwareUpdater\Exceptions\ApiRequestFailedException;
 use AshleyFae\SoftwareUpdater\Http\ApiClient;
 
 class LicenseManager
@@ -18,6 +19,9 @@ class LicenseManager
         $this->client = $client ?? new ApiClient();
     }
 
+    /**
+     * @throws ApiRequestFailedException
+     */
     public function activate(): ?ActivationResponse
     {
         $licenseKey = $this->getLicenseKey();
@@ -27,13 +31,14 @@ class LicenseManager
 
         $activation = $this->client->activate($licenseKey, $this->config->productId);
 
-        if ($activation !== null) {
-            $this->refreshStatus();
-        }
+        $this->refreshStatus();
 
         return $activation;
     }
 
+    /**
+     * @throws ApiRequestFailedException
+     */
     public function deactivate(): void
     {
         $licenseKey = $this->getLicenseKey();
@@ -66,6 +71,7 @@ class LicenseManager
 
     /**
      * Makes a live API call and updates the cached status.
+     * Returns null silently on API failure — this is intentionally best-effort.
      */
     public function refreshStatus(): ?LicenseStatusResponse
     {
@@ -74,8 +80,14 @@ class LicenseManager
             return null;
         }
 
-        $statuses = $this->client->bulkStatus([$licenseKey]);
-        $status   = $statuses[$licenseKey] ?? null;
+        try {
+            $statuses = $this->client->bulkStatus([$licenseKey]);
+        } catch (ApiRequestFailedException $e) {
+            error_log('software-updater-sdk: refreshStatus failed — ' . $e->getMessage());
+            return null;
+        }
+
+        $status = $statuses[$licenseKey] ?? null;
 
         if ($status !== null) {
             update_option($this->statusOptionName(), wp_json_encode($status->toArray()), false);
