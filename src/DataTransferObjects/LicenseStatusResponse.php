@@ -49,4 +49,40 @@ class LicenseStatusResponse
     {
         return $this->status->isActive();
     }
+
+    /**
+     * Returns true if the given URL is in the site activations list.
+     * Applies the same normalization the server uses: extract host+path, lowercase, strip www., untrail slash.
+     */
+    public function isActivatedFor(string $url): bool
+    {
+        $normalized = $this->normalizeDomain($url);
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach ($this->siteActivations as $activation) {
+            if ($activation->domain === $normalized) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeDomain(string $url): string
+    {
+        $parts  = parse_url($url);
+        $domain = strtolower(($parts['host'] ?? '') . ($parts['path'] ?? ''));
+
+        if ($domain === '') {
+            return '';
+        }
+
+        if (str_starts_with($domain, 'www.')) {
+            $domain = substr($domain, 4);
+        }
+
+        return rtrim($domain, '/');
+    }
 }
