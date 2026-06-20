@@ -50,6 +50,11 @@ class LicenseStatusResponse
         return $this->status->isActive();
     }
 
+    public function isExpired(): bool
+    {
+        return $this->status->isExpired() || ! empty($this->expiresAt) && $this->expiresAt->getTimestamp() < time();
+    }
+
     /**
      * Returns true if the given URL is in the site activations list.
      * Applies the same normalization the server uses: extract host+path, lowercase, strip www., untrail slash.
