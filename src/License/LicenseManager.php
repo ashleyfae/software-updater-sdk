@@ -96,7 +96,7 @@ class LicenseManager
         return $status;
     }
 
-    private function getLicenseKey(): string
+    public function getLicenseKey(): string
     {
         return (string) get_option($this->config->optionName, '');
     }

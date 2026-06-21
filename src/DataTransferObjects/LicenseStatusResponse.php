@@ -4,6 +4,7 @@ namespace AshleyFae\SoftwareUpdater\DataTransferObjects;
 
 use AshleyFae\SoftwareUpdater\Enums\LicenseStatus;
 use DateTimeImmutable;
+use DateTimeInterface;
 
 class LicenseStatusResponse
 {
@@ -39,7 +40,7 @@ class LicenseStatusResponse
         return [
             'license_key'      => $this->licenseKey,
             'status'           => $this->status->getValue(),
-            'expires_at'       => $this->expiresAt?->format(\DateTimeInterface::ATOM),
+            'expires_at'       => $this->expiresAt?->format(DateTimeInterface::ATOM),
             'bundle_id'        => $this->bundleId,
             'site_activations' => array_map(fn(ActivationResponse $a) => $a->toArray(), $this->siteActivations),
         ];
@@ -73,6 +74,14 @@ class LicenseStatusResponse
         }
 
         return false;
+    }
+
+    /**
+     * Returns true if the current site is in the site activations list.
+     */
+    public function isActivatedForCurrentSite(): bool
+    {
+        return $this->isActivatedFor(home_url());
     }
 
     private function normalizeDomain(string $url): string
