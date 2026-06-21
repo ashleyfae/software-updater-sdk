@@ -59,7 +59,7 @@ class UpdateChecker
 
             $basename = plugin_basename($config->pluginFile);
 
-            if (version_compare($release->version, $config->version, '>') && ! empty($release->downloadUrl)) {
+            if (version_compare($release->version, $config->version, '>')) {
                 $transient->response[$basename] = $this->buildPluginUpdateObject($release, $config);
             } else {
                 $transient->no_update[$basename] = $this->buildPluginUpdateObject($release, $config);
@@ -91,7 +91,7 @@ class UpdateChecker
 
             $slug = $this->slug($config);
 
-            if (version_compare($release->version, $config->version, '>') && ! empty($release->downloadUrl)) {
+            if (version_compare($release->version, $config->version, '>')) {
                 $transient->response[$slug] = $this->buildThemeUpdateArray($release, $config);
             } else {
                 $transient->no_update[$slug] = $this->buildThemeUpdateArray($release, $config);
