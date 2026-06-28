@@ -101,6 +101,11 @@ class LicenseManager
         return (string) get_option($this->config->optionName, '');
     }
 
+    public function setLicenseKey(string $licenseKey): void
+    {
+        update_option($this->config->optionName, $licenseKey);
+    }
+
     private function statusOptionName(): string
     {
         return $this->config->optionName . '_status';
